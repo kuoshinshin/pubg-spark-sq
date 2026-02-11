@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { authApi } from '../../services/api'
 
 // 接收登录回调函数
 const props = defineProps({
@@ -9,75 +10,102 @@ const props = defineProps({
   }
 })
 
-const email = ref('')
+const account = ref('')
 const password = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 
-const handleLogin = () => {
+const handleLogin = async () => {
   errorMessage.value = ''
   isLoading.value = true
   
-  // 模拟登录请求延迟
-  setTimeout(() => {
-    // 调用父组件传递的登录函数
-    const loginSuccess = props.onLogin(email.value, password.value)
+  try {
+    // 调用后端登录API
+    const response = await authApi.login({ account: account.value, password: password.value })
+    
+    // 存储token到本地存储
+    localStorage.setItem('token', response.token)
+    
+    // 调用父组件传递的登录函数，传递完整的登录信息（包含token）
+    props.onLogin({
+      ...response.user,
+      token: response.token
+    })
     isLoading.value = false
     
-    if (loginSuccess) {
-      // 登录成功
-      console.log('登录成功:', { email: email.value })
-    } else {
-      // 登录失败
-      errorMessage.value = '邮箱或密码错误，请联系管理员获取账号'
-      console.log('登录失败:', { email: email.value })
-    }
-  }, 1000)
+    console.log('登录成功:', { user: response.user, token: response.token })
+  } catch (error) {
+    isLoading.value = false
+    errorMessage.value = error.message || '登录失败，请联系管理员'
+    console.error('登录失败:', error)
+  }
+}
+
+// 切换到注册页面
+const switchToRegister = () => {
+  window.location.hash = 'register'
 }
 </script>
 
 <template>
   <div class="login-container">
-    <div class="login-form">
-      <!-- 系统标题 -->
-      <div class="system-title">
-        <h1>PUBG Spark Squad</h1>
-        <p class="system-subtitle">星火計劃交流平台</p>
+    <div class="login-wrapper">
+      <!-- 系统标题部分 -->
+      <div class="system-title-section">
+        <div class="system-title">
+          <h1>PUBG Spark Squad</h1>
+          <p class="system-subtitle">星火計劃交流平台</p>
+        </div>
       </div>
       
-      <h2>登录</h2>
-      <p class="login-subtitle">请使用管理员提供的账号登录</p>
+      <!-- 分隔线 -->
+      <div class="divider"></div>
       
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label for="email">邮箱</label>
-          <input 
-            type="email" 
-            id="email" 
-            v-model="email" 
-            required 
-            placeholder="请输入邮箱地址"
-          />
+      <!-- 登录表单部分 -->
+      <div class="login-form-section">
+        <h2>登录</h2>
+        <p class="login-subtitle">请输入您的账号和密码登录</p>
+        
+        <el-form @submit.prevent="handleLogin" label-position="top">
+          <el-form-item label="账号" required>
+            <el-input 
+              v-model="account" 
+              placeholder="请输入账号"
+              autocomplete="off"
+            />
+          </el-form-item>
+          
+          <el-form-item label="密码" required>
+            <el-input 
+              v-model="password" 
+              type="password" 
+              placeholder="请输入密码"
+              autocomplete="current-password"
+            />
+          </el-form-item>
+          
+          <el-form-item>
+            <div v-if="errorMessage" class="error-message">
+              {{ errorMessage }}
+            </div>
+          </el-form-item>
+          
+          <el-form-item>
+            <el-button 
+              type="primary" 
+              native-type="submit" 
+              :loading="isLoading" 
+              :disabled="isLoading"
+              style="width: 100%"
+            >
+              {{ isLoading ? '登录中...' : '登录' }}
+            </el-button>
+          </el-form-item>
+        </el-form>
+        
+        <div class="form-footer">
+          <p>没有账号？<a href="#register" @click="switchToRegister">立即注册</a></p>
         </div>
-        <div class="form-group">
-          <label for="password">密码</label>
-          <input 
-            type="password" 
-            id="password" 
-            v-model="password" 
-            required 
-            placeholder="请输入密码"
-          />
-        </div>
-        <div v-if="errorMessage" class="error-message">
-          {{ errorMessage }}
-        </div>
-        <button type="submit" :disabled="isLoading" class="login-button">
-          {{ isLoading ? '登录中...' : '登录' }}
-        </button>
-      </form>
-      <div class="form-footer">
-        <p>没有账号？请联系管理员添加</p>
       </div>
     </div>
   </div>
@@ -90,22 +118,35 @@ const handleLogin = () => {
   align-items: center;
   min-height: 100vh;
   padding: 2rem;
+  padding-top: calc(2rem + var(--safe-area-inset-top));
+  padding-bottom: calc(2rem + var(--safe-area-inset-bottom));
+  padding-left: calc(2rem + var(--safe-area-inset-left));
+  padding-right: calc(2rem + var(--safe-area-inset-right));
   background-color: #fafafa;
 }
 
-.login-form {
+.login-wrapper {
+  display: flex;
   width: 100%;
-  max-width: 400px;
-  padding: 4rem 2.5rem;
+  max-width: 1000px;
+  min-height: 500px;
+  max-height: 90vh;
   background-color: #ffffff;
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  text-align: center;
+  overflow: hidden;
 }
 
-/* 系统标题 */
-.system-title {
-  margin-bottom: 3rem;
+/* 系统标题部分 */
+.system-title-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem;
+  background-color: #f9f9f9;
+  text-align: center;
 }
 
 .system-title h1 {
@@ -123,7 +164,28 @@ const handleLogin = () => {
   letter-spacing: 0.01em;
 }
 
-.login-form h2 {
+/* 分隔线 */
+.divider {
+  width: 1px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #e0e0e0,
+    #e0e0e0 10px,
+    transparent 10px,
+    transparent 15px
+  );
+}
+
+/* 登录表单部分 */
+.login-form-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.login-form-section h2 {
   margin-bottom: 0.75rem;
   font-size: 1.75rem;
   font-weight: 600;
@@ -138,39 +200,6 @@ const handleLogin = () => {
   line-height: 1.5;
 }
 
-.form-group {
-  margin-bottom: 1.75rem;
-  text-align: left;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #1d1d1f;
-  letter-spacing: 0.01em;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 1rem 1.25rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  font-size: 1rem;
-  font-weight: 400;
-  color: #1d1d1f;
-  background-color: #f9f9f9;
-  transition: all 0.3s ease;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #1d1d1f;
-  box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.08);
-  background-color: #ffffff;
-}
-
 .error-message {
   margin-bottom: 1.5rem;
   padding: 1rem;
@@ -182,43 +211,12 @@ const handleLogin = () => {
   line-height: 1.5;
 }
 
-/* 登录按钮 - 黑白配色极简设计 */
-.login-button {
-  width: 100%;
-  margin-top: 1.5rem;
-  padding: 1rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #ffffff;
-  background-color: #1d1d1f;
-  border: 1px solid #1d1d1f;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  letter-spacing: 0.01em;
-}
-
-.login-button:hover:not(:disabled) {
-  background-color: #000000;
-  border-color: #000000;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.login-button:disabled {
-  background-color: #f5f5f5;
-  color: #86868b;
-  border-color: #e0e0e0;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
 .form-footer {
   margin-top: 3rem;
   font-size: 0.875rem;
   color: #86868b;
   line-height: 1.5;
+  text-align: center;
 }
 
 .form-footer a {
@@ -239,29 +237,46 @@ const handleLogin = () => {
     padding: 1.5rem;
   }
   
-  .login-form {
+  .login-wrapper {
+    flex-direction: column;
+    min-height: auto;
+  }
+  
+  .system-title-section {
     padding: 3rem 2rem;
+  }
+  
+  .login-form-section {
+    padding: 3rem 2rem;
+  }
+  
+  .divider {
+    width: 100%;
+    height: 1px;
+    background-image: repeating-linear-gradient(
+      to right,
+      #e0e0e0,
+      #e0e0e0 10px,
+      transparent 10px,
+      transparent 15px
+    );
   }
   
   .system-title h1 {
     font-size: 2rem;
   }
   
-  .login-form h2 {
+  .login-form-section h2 {
     font-size: 1.5rem;
-  }
-  
-  .form-group input {
-    padding: 0.875rem 1rem;
-  }
-  
-  .login-button {
-    padding: 0.875rem 1.25rem;
   }
 }
 
 @media (max-width: 480px) {
-  .login-form {
+  .system-title-section {
+    padding: 2.5rem 1.5rem;
+  }
+  
+  .login-form-section {
     padding: 2.5rem 1.5rem;
   }
   

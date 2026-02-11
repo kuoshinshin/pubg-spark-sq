@@ -1,86 +1,53 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import Login from './components/auth/Login.vue'
-import Chat from './components/chat/Chat.vue'
-import Profile from './components/profile/Profile.vue'
-import Match from './components/match/Match.vue'
-import Event from './components/event/Event.vue'
+import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+
+// 动态导入组件，实现懒加载
+const Login = defineAsyncComponent(() => import('./components/auth/Login.vue'))
+const Register = defineAsyncComponent(() => import('./components/auth/Register.vue'))
+const Chat = defineAsyncComponent(() => import('./components/chat/Chat.vue'))
+const Profile = defineAsyncComponent(() => import('./components/profile/Profile.vue'))
+const Match = defineAsyncComponent(() => import('./components/match/Match.vue'))
+
 
 // 登录状态管理
 const isLoggedIn = ref(false)
 const userData = ref(null)
+const authPage = ref('login') // 'login' 或 'register'
+
+// 深色模式状态
+const darkMode = ref(false)
+
+// PWA安装状态
+const canInstallPWA = ref(false)
+const isInstalling = ref(false)
 
 // 页面状态管理
-const currentPage = ref('home')
-
-// 轮播功能
-const currentSlide = ref(0)
-const slideInterval = ref(null)
-const isHovering = ref(false)
-
-// 轮播数据
-const slides = ref([
-  {
-    id: 1,
-    type: 'text',
-    title: 'PUBG Spark Squad',
-    subtitle: 'for 星火計劃',
-    content: '在这里，我们可以互相交流、分享游戏心得，一起享受PUBG的乐趣',
-    buttons: [
-      { text: '立即加入', action: 'join' },
-      { text: '了解更多', action: 'learn', secondary: true }
-    ]
-  },
-  {
-    id: 2,
-    type: 'promotion',
-    title: '星火比赛',
-    subtitle: '展现你的实力',
-    content: '每个季度，我们将举办比赛，赢取荣誉',
-    buttons: [
-      { text: '查看赛程', action: 'schedule' },
-      { text: '报名参加', action: 'register', secondary: true }
-    ]
-  },
-  {
-    id: 3,
-    type: 'event',
-    title: '线下聚会',
-    subtitle: '与队友面对面交流',
-    content: '不定期我们将举办线下聚会，一起吃饭、开黑，增进队友感情',
-    buttons: [
-      { text: '查看详情', action: 'details' },
-      { text: '我要参加', action: 'attend', secondary: true }
-    ]
-  }
-])
-
-// 模拟已注册用户列表（实际应该从后台获取）
-const registeredUsers = [
-  { email: 'player1@example.com', password: 'password123' },
-  { email: 'player2@example.com', password: 'password123' },
-  { email: 'player3@example.com', password: 'password123' }
-]
+const currentPage = ref(localStorage.getItem('currentPage') || 'home')
 
 // 登录处理
-const handleLogin = (email, password) => {
-  // 验证用户是否在注册列表中
-  const user = registeredUsers.find(u => u.email === email && u.password === password)
-  if (user) {
-    isLoggedIn.value = true
-    // 为用户生成唯一的头像种子，基于邮箱
-    const avatarSeed = email.split('@')[0]
-    userData.value = {
-      email,
-      username: avatarSeed,
-      avatar: `https://picsum.photos/seed/${avatarSeed}/200/200`
-    }
-    // 保存登录状态到本地存储
-    localStorage.setItem('isLoggedIn', 'true')
-    localStorage.setItem('userData', JSON.stringify(userData.value))
-    return true
+const handleLogin = (user) => {
+  // 登录成功
+  isLoggedIn.value = true
+  // 使用后端返回的用户信息
+  userData.value = {
+    username: user.username,
+    avatar: user.avatar,
+    role: user.role || 'user' // 保存用户角色信息
   }
-  return false
+  // 保存登录状态到本地存储
+  localStorage.setItem('isLoggedIn', 'true')
+  localStorage.setItem('userData', JSON.stringify(userData.value))
+  // 保存 token 到本地存储
+  if (user.token) {
+    localStorage.setItem('token', user.token)
+  }
+  return true
+}
+
+// 注册处理
+const handleRegister = () => {
+  // 注册成功后切换到登录页面
+  authPage.value = 'login'
 }
 
 // 退出登录
@@ -90,73 +57,51 @@ const handleLogout = () => {
   // 清除本地存储
   localStorage.removeItem('isLoggedIn')
   localStorage.removeItem('userData')
+  localStorage.removeItem('token')
+  // 跳转到登录页面
+  window.location.hash = 'login'
+  // 强制页面刷新，确保状态更新
+  window.location.reload()
 }
 
-// 轮播控制
-const nextSlide = () => {
-  currentSlide.value = (currentSlide.value + 1) % slides.value.length
-}
-
-const prevSlide = () => {
-  currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length
-}
-
-const goToSlide = (index) => {
-  currentSlide.value = index
-}
-
-// 自动轮播
-const startAutoSlide = () => {
-  if (!isHovering.value) {
-    slideInterval.value = setInterval(nextSlide, 5000)
+// 切换深色模式
+const toggleDarkMode = async () => {
+  const newDarkMode = !darkMode.value
+  darkMode.value = newDarkMode
+  
+  // 保存到本地存储
+  localStorage.setItem('darkMode', newDarkMode)
+  
+  // 应用深色模式样式
+  if (newDarkMode) {
+    document.documentElement.classList.add('dark-mode')
+  } else {
+    document.documentElement.classList.remove('dark-mode')
   }
 }
 
-const stopAutoSlide = () => {
-  if (slideInterval.value) {
-    clearInterval(slideInterval.value)
-    slideInterval.value = null
-  }
-}
-
-// 鼠标悬停处理
-const handleMouseEnter = () => {
-  isHovering.value = true
-  stopAutoSlide()
-}
-
-const handleMouseLeave = () => {
-  isHovering.value = false
-  startAutoSlide()
-}
-
-// 触摸手势支持
-const touchStartX = ref(0)
-const touchEndX = ref(0)
-
-const handleTouchStart = (e) => {
-  touchStartX.value = e.changedTouches[0].screenX
-}
-
-const handleTouchEnd = (e) => {
-  touchEndX.value = e.changedTouches[0].screenX
-  handleSwipe()
-}
-
-const handleSwipe = () => {
-  const swipeThreshold = 50
-  if (touchEndX.value < touchStartX.value - swipeThreshold) {
-    // 向左滑动，下一张
-    nextSlide()
-  } else if (touchEndX.value > touchStartX.value + swipeThreshold) {
-    // 向右滑动，上一张
-    prevSlide()
+// 从本地存储加载深色模式设置
+const loadDarkModeFromStorage = () => {
+  const savedDarkMode = localStorage.getItem('darkMode')
+  if (savedDarkMode !== null) {
+    const isDark = savedDarkMode === 'true'
+    darkMode.value = isDark
+    if (isDark) {
+      document.documentElement.classList.add('dark-mode')
+    } else {
+      document.documentElement.classList.remove('dark-mode')
+    }
   }
 }
 
 // 处理页面切换
 const handlePageChange = (page) => {
-  currentPage.value = page
+  // 跳过 logout 页面，因为它是一个操作，不是一个实际的页面
+  if (page !== 'logout') {
+    currentPage.value = page
+    // 保存当前页面到本地存储
+    localStorage.setItem('currentPage', page)
+  }
 }
 
 // 处理轮播按钮点击
@@ -187,26 +132,120 @@ const handleSlideButtonClick = (action) => {
   }
 }
 
+// 处理PWA安装
+const handleInstallPWA = () => {
+  if (window.installApp) {
+    isInstalling.value = true
+    window.installApp()
+    // 安装完成后重置状态
+    setTimeout(() => {
+      isInstalling.value = false
+    }, 3000)
+  }
+}
+
+// 监听hash变化，切换登录/注册页面
+const handleHashChange = () => {
+  const hash = window.location.hash
+  if (hash === '#login') {
+    authPage.value = 'login'
+  } else if (hash === '#register') {
+    authPage.value = 'register'
+  } else if (hash.startsWith('#post-')) {
+    // 处理分享链接，跳转到圈子页面
+    currentPage.value = 'chat'
+  }
+}
+
+// 带路由守卫的hash变化处理函数
+const handleHashChangeWithGuard = () => {
+  const hash = window.location.hash
+  
+  // 处理分享链接
+  if (hash.startsWith('#post-')) {
+    // 检查token
+    const token = localStorage.getItem('token')
+    if (!token) {
+      // 没有token，强制跳转到登录页面
+      window.location.hash = 'login'
+    } else {
+      // 有token，跳转到圈子页面
+      currentPage.value = 'chat'
+      // 保存当前页面到本地存储
+      localStorage.setItem('currentPage', 'chat')
+    }
+  } else {
+    handleHashChange()
+    // 检查当前是否在登录/注册页面
+    if (hash !== '#login' && hash !== '#register') {
+      // 非登录/注册页面，检查token
+      const token = localStorage.getItem('token')
+      if (!token) {
+        // 没有token，强制跳转到登录页面
+        window.location.hash = 'login'
+      }
+    }
+  }
+}
+
 // 生命周期钩子
 onMounted(() => {
+  // 检查token和登录状态
+  const token = localStorage.getItem('token')
   const savedLoginState = localStorage.getItem('isLoggedIn')
   const savedUserData = localStorage.getItem('userData')
-  if (savedLoginState === 'true' && savedUserData) {
+  
+  if (token && savedLoginState === 'true' && savedUserData) {
     isLoggedIn.value = true
     userData.value = JSON.parse(savedUserData)
+    // 确保用户数据中包含角色信息
+    if (!userData.value.role) {
+      userData.value.role = 'user'
+    }
+  } else {
+    // 没有token或登录状态，跳转到登录页面
+    isLoggedIn.value = false
+    userData.value = null
+    // 检查是否是分享链接
+    const hash = window.location.hash
+    if (!hash.startsWith('#post-')) {
+      window.location.hash = 'login'
+    }
   }
-  startAutoSlide()
+  
+  // 加载深色模式设置
+  loadDarkModeFromStorage()
+  
+  // 初始检查hash
+  handleHashChangeWithGuard()
+  
+  // 监听hash变化，实现路由守卫
+  window.addEventListener('hashchange', handleHashChangeWithGuard)
+  
+  // 监听beforeinstallprompt事件
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // 阻止Chrome 67及更早版本自动显示安装提示
+    e.preventDefault()
+    // 可以安装PWA
+    canInstallPWA.value = true
+  })
 })
 
 onUnmounted(() => {
-  stopAutoSlide()
+  // 移除hash变化监听
+  window.removeEventListener('hashchange', handleHashChangeWithGuard)
 })
 </script>
 
 <template>
   <div class="app">
-    <!-- 登录页面 -->
-    <Login v-if="!isLoggedIn" :on-login="handleLogin" />
+    <!-- 登录和注册页面 -->
+    <div v-if="!isLoggedIn">
+      <!-- 登录页面 -->
+      <Login v-if="authPage === 'login'" :on-login="handleLogin" />
+      <!-- 注册页面 -->
+      <Register v-else-if="authPage === 'register'" :on-register="handleRegister" />
+    </div>
     
     <!-- 主内容 -->
     <div v-else>
@@ -217,14 +256,25 @@ onUnmounted(() => {
             <div class="logo">
               <h1>PUBG Spark Squad</h1>
             </div>
-            <nav class="nav-links">
-              <a href="#" @click.prevent="handlePageChange('home')" :class="{ 'active': currentPage === 'home' }">首页</a>
-              <a href="#" @click.prevent="handlePageChange('chat')" :class="{ 'active': currentPage === 'chat' }">交流</a>
-              <a href="#" @click.prevent="handlePageChange('match')" :class="{ 'active': currentPage === 'match' }">比赛</a>
-              <a href="#" @click.prevent="handlePageChange('event')" :class="{ 'active': currentPage === 'event' }">活动</a>
-              <a href="#" @click.prevent="handlePageChange('profile')" :class="{ 'active': currentPage === 'profile' }">个人</a>
-              <button class="logout-button" @click="handleLogout">退出登录</button>
-            </nav>
+            <el-menu :default-active="currentPage" class="el-menu-demo" mode="horizontal" @select="handlePageChange">
+              <el-menu-item index="home">首页</el-menu-item>
+              <el-menu-item index="chat">圈子</el-menu-item>
+              <el-menu-item index="match">比赛</el-menu-item>
+
+              <el-menu-item index="profile">个人</el-menu-item>
+              <el-menu-item index="install" v-if="canInstallPWA">
+                <template #title>
+                  <el-button type="primary" @click="handleInstallPWA" :loading="isInstalling">
+                    {{ isInstalling ? '安装中...' : '安装APP' }}
+                  </el-button>
+                </template>
+              </el-menu-item>
+              <el-menu-item index="logout" @click="handleLogout" style="display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                <template #title>
+                  <div style="width: 100%; text-align: center;">退出登录</div>
+                </template>
+              </el-menu-item>
+            </el-menu>
           </div>
         </div>
       </header>
@@ -233,83 +283,79 @@ onUnmounted(() => {
       <main class="page-content">
         <!-- 首页 -->
         <div v-if="currentPage === 'home'">
-          <!-- 轮播区域 -->
-          <section class="hero-carousel" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-            <div class="carousel-container">
-              <!-- 轮播内容 -->
-              <div class="carousel-slides">
-                <div 
-                  v-for="(slide, index) in slides" 
-                  :key="slide.id"
-                  class="carousel-slide"
-                  :class="{ 'active': currentSlide === index, 'prev': currentSlide === (index + 1) % slides.length, 'next': currentSlide === (index - 1 + slides.length) % slides.length }"
-                >
-                  <div class="container">
-                    <h1>{{ slide.title }}</h1>
-                    <h2>{{ slide.subtitle }}</h2>
-                    <p>{{ slide.content }}</p>
-                    <div class="hero-buttons">
-                      <button 
-                        v-for="(button, btnIndex) in slide.buttons" 
-                        :key="btnIndex"
-                        :class="{ 'secondary': button.secondary }"
-                        @click="handleSlideButtonClick(button.action)"
-                      >
-                        {{ button.text }}
-                      </button>
-                    </div>
+          <!-- 轮播图 -->
+          <section class="hero-carousel">
+            <div class="container">
+              <el-carousel :interval="5000" type="default" height="600px">
+                <el-carousel-item>
+                  <div class="carousel-slide">
+                    <h3>欢迎加入 PUBG Spark Squad</h3>
+                    <p>与队友一起征战沙场，共创辉煌</p>
+                    <el-button type="primary" @click="handleSlideButtonClick('join')">立即加入</el-button>
                   </div>
-                </div>
-              </div>
-              
-              <!-- 轮播控制 -->
-              <div class="carousel-controls">
-                <div class="carousel-indicators">
-                  <button 
-                    v-for="(slide, index) in slides" 
-                    :key="slide.id"
-                    class="carousel-indicator"
-                    :class="{ 'active': currentSlide === index }"
-                    @click="goToSlide(index)"
-                    :aria-label="`切换到幻灯片 ${index + 1}`"
-                  ></button>
-                </div>
-              </div>
+                </el-carousel-item>
+                <el-carousel-item>
+                  <div class="carousel-slide">
+                    <h3>了解更多关于我们</h3>
+                    <p>探索团队文化，了解我们的使命</p>
+                    <el-button type="primary" @click="handleSlideButtonClick('learn')">了解详情</el-button>
+                  </div>
+                </el-carousel-item>
+                <el-carousel-item>
+                  <div class="carousel-slide">
+                    <h3>查看最新比赛赛程</h3>
+                    <p>了解团队近期比赛安排</p>
+                    <el-button type="primary" @click="handleSlideButtonClick('schedule')">查看赛程</el-button>
+                  </div>
+                </el-carousel-item>
+                <el-carousel-item>
+                  <div class="carousel-slide">
+                    <h3>参与我们的活动</h3>
+                    <p>报名参加线下聚会和线上活动</p>
+                    <el-button type="primary" @click="handleSlideButtonClick('attend')">立即报名</el-button>
+                  </div>
+                </el-carousel-item>
+              </el-carousel>
             </div>
           </section>
-
+          
           <!-- 功能区域 -->
           <section class="features">
             <div class="container">
               <h2>我们的功能</h2>
               <div class="features-grid">
               <!-- 交流功能 -->
-              <div class="feature-card">
-                <h3>实时交流</h3>
+              <el-card class="feature-card" shadow="hover">
+                <template #header>
+                  <div class="card-header">
+                    <h3>实时交流</h3>
+                  </div>
+                </template>
                 <p>与队友实时聊天，讨论战术，分享游戏体验</p>
-                <a href="#" @click.prevent="handlePageChange('chat')" class="feature-link">开始聊天</a>
-              </div>
+                <el-button type="primary" @click="handlePageChange('chat')">开始聊天</el-button>
+              </el-card>
               
               <!-- 比赛功能 -->
-              <div class="feature-card">
-                <h3>比赛信息</h3>
+              <el-card class="feature-card" shadow="hover">
+                <template #header>
+                  <div class="card-header">
+                    <h3>比赛信息</h3>
+                  </div>
+                </template>
                 <p>查看团队比赛安排，赛事结果和排名，参与队内比赛</p>
-                <a href="#" @click.prevent="handlePageChange('match')" class="feature-link">查看比赛</a>
-              </div>
-              
-              <!-- 活动功能 -->
-              <div class="feature-card">
-                <h3>活动安排</h3>
-                <p>了解团队活动计划，报名参加线下聚会和线上活动</p>
-                <a href="#" @click.prevent="handlePageChange('event')" class="feature-link">查看活动</a>
-              </div>
+                <el-button type="primary" @click="handlePageChange('match')">查看比赛</el-button>
+              </el-card>
               
               <!-- 个人中心 -->
-              <div class="feature-card">
-                <h3>个人中心</h3>
+              <el-card class="feature-card" shadow="hover">
+                <template #header>
+                  <div class="card-header">
+                    <h3>个人中心</h3>
+                  </div>
+                </template>
                 <p>管理你的个人资料，查看游戏统计，设置偏好</p>
-                <a href="#" @click.prevent="handlePageChange('profile')" class="feature-link">进入中心</a>
-              </div>
+                <el-button type="primary" @click="handlePageChange('profile')">进入中心</el-button>
+              </el-card>
             </div>
             </div>
           </section>
@@ -317,9 +363,8 @@ onUnmounted(() => {
 
         <!-- 交流页面 -->
         <div v-else-if="currentPage === 'chat'">
-          <section class="page-section">
+          <section class="page-section chat-section">
             <div class="container">
-              <h1>交流中心</h1>
               <Chat />
             </div>
           </section>
@@ -330,10 +375,7 @@ onUnmounted(() => {
           <Match />
         </div>
 
-        <!-- 活动页面 -->
-        <div v-else-if="currentPage === 'event'">
-          <Event />
-        </div>
+        
 
         <!-- 个人页面 -->
         <div v-else-if="currentPage === 'profile'">
@@ -377,13 +419,16 @@ onUnmounted(() => {
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   z-index: 1000;
+  /* 适配刘海屏 */
+  padding-top: var(--safe-area-inset-top);
+  min-height: 60px;
 }
 
 .navbar-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 0;
+  padding: 0.75rem 0;
 }
 
 .logo h1 {
@@ -438,222 +483,49 @@ onUnmounted(() => {
   }
 }
 
-/* 轮播区域 */
-.hero-carousel {
-  position: relative;
-  padding: 12rem 0 10rem;
-  text-align: center;
-  background: linear-gradient(135deg, #f5f5f7 0%, #ffffff 100%);
-  overflow: hidden;
-}
 
-.carousel-container {
-  position: relative;
-}
-
-.carousel-slides {
-  position: relative;
-  height: 400px; /* 设置固定高度，确保切换时布局稳定 */
-  overflow: hidden;
-}
-
-.carousel-slide {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(100%);
-  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.carousel-slide.active {
-  position: absolute;
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(0);
-}
-
-.carousel-slide.prev {
-  transform: translateX(-100%);
-  opacity: 0;
-}
-
-.carousel-slide.next {
-  transform: translateX(100%);
-  opacity: 0;
-}
-
-.carousel-slide h1 {
-  margin-bottom: 1.5rem;
-  opacity: 0;
-  animation: fadeIn 0.8s ease forwards 0.2s;
-}
-
-.carousel-slide h2 {
-  margin-bottom: 2.5rem;
-  color: #86868b;
-  opacity: 0;
-  animation: fadeIn 0.8s ease forwards 0.4s;
-}
-
-.carousel-slide p {
-  margin-bottom: 4rem;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-  opacity: 0;
-  animation: fadeIn 0.8s ease forwards 0.6s;
-}
-
-/* 淡入动画 */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* 按钮样式改进 */
-.hero-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  opacity: 0;
-  animation: fadeIn 0.8s ease forwards 0.8s;
-}
-
-.hero-buttons button {
-  padding: 1rem 2rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 980px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  letter-spacing: 0.01em;
-  min-width: 140px;
-}
-
-.hero-buttons button:not(.secondary) {
-  background-color: #1d1d1f;
-  color: #ffffff;
-}
-
-.hero-buttons button:not(.secondary):hover {
-  background-color: #000000;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.hero-buttons .secondary {
-  background-color: #ffffff;
-  color: #1d1d1f;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.hero-buttons .secondary:hover {
-  background-color: #f9f9f9;
-  border-color: #d0d0d0;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-
-/* 轮播控制改进 */
-.carousel-controls {
-  position: relative;
-  margin-top: 4rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 10;
-  opacity: 0;
-  animation: fadeIn 0.8s ease forwards 1s;
-}
-
-.carousel-indicators {
-  display: flex;
-  gap: 1rem;
-}
-
-.carousel-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #e0e0e0; /* 未选中时显示灰色 */
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  outline: none;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-.carousel-indicator:hover {
-  background-color: #d0d0d0;
-  transform: scale(1.1);
-}
-
-.carousel-indicator.active {
-  background-color: #1d1d1f; /* 选中时显示黑色 */
-  transform: scale(1.2);
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .hero-carousel {
-    padding: 10rem 0 8rem;
-  }
-  
-  .hero-buttons {
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-  }
-  
-  .hero-buttons button {
-    width: 100%;
-    max-width: 240px;
-  }
-  
-  .carousel-controls {
-    margin-top: 3rem;
-  }
-  
-  .carousel-indicators {
-    gap: 0.75rem;
-  }
-  
-  .carousel-indicator {
-    width: 8px;
-    height: 8px;
-  }
-}
-
-/* 触摸设备优化 */
-@media (hover: none) and (pointer: coarse) {
-  .hero-buttons button:hover {
-    transform: none;
-    box-shadow: none;
-  }
-  
-  .carousel-indicator:hover {
-    transform: none;
-  }
-}
 
 /* 页面内容 */
 .page-content {
   flex: 1;
 }
 
+/* 轮播图 */
+.hero-carousel {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 0 0;
+  margin: 80px 0;
+}
+
+.carousel-slide {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #1d1d1f;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  background-color: #f5f5f7;
+  border-radius: 8px;
+}
+
+.hero-carousel .container {
+  flex: 1;
+  width: 100%;
+}
+
 .page-section {
   padding: 8rem 0;
   text-align: center;
+}
+
+.chat-section {
+  background-color: #ffffff;
 }
 
 .page-section h1 {
@@ -737,6 +609,82 @@ onUnmounted(() => {
   color: #86868b;
 }
 
+/* 深色模式 */
+.dark-mode {
+  background-color: #121212;
+  color: #ffffff;
+}
+
+.dark-mode .navbar {
+  background-color: rgba(18, 18, 18, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .logo h1 {
+  color: #ffffff;
+}
+
+.dark-mode .el-menu {
+  background-color: transparent;
+}
+
+.dark-mode .el-menu-item {
+  color: #ffffff;
+}
+
+.dark-mode .el-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .el-menu-item.is-active {
+  color: #0071e3;
+}
+
+.dark-mode .features {
+  background: linear-gradient(135deg, #1a1a1a 0%, #121212 100%);
+}
+
+.dark-mode .features h2 {
+  color: #ffffff;
+}
+
+.dark-mode .feature-card {
+  background-color: #1a1a1a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .feature-card h3 {
+  color: #ffffff;
+}
+
+.dark-mode .feature-card p {
+  color: #e0e0e0;
+}
+
+.dark-mode .footer {
+  background-color: #1a1a1a;
+}
+
+.dark-mode .footer-links a {
+  color: #e0e0e0;
+}
+
+.dark-mode .footer-links a:hover {
+  color: #ffffff;
+}
+
+.dark-mode .footer-copyright {
+  color: #e0e0e0;
+}
+
+.dark-mode .page-section h1 {
+  color: #ffffff;
+}
+
+.dark-mode .chat-section {
+  background-color: #1a1a1a;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .navbar-content {
@@ -747,15 +695,6 @@ onUnmounted(() => {
   
   .nav-links {
     gap: 1rem;
-  }
-  
-  .hero {
-    padding: 8rem 0 6rem;
-  }
-  
-  .hero-buttons {
-    flex-direction: column;
-    align-items: center;
   }
   
   .features {

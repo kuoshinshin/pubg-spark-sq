@@ -2,26 +2,27 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="icon" type="image/svg+xml" href="./vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="PUBG游戏小群体交流分享网站，极简风格设计，类似于Apple官网" />
     <meta name="keywords" content="PUBG,游戏,交流,分享,极简设计" />
     <meta name="author" content="PUBG Spark Squad" />
     
-    <!-- 字体预加载 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap"></noscript>
+    <!-- PWA相关配置 -->
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Spark Squad" />
+    <link rel="apple-touch-icon" href="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=PUBG%20game%20app%20icon%20with%20spark%20effect%2C%20minimalist%20design%2C%20dark%20background%2C%20professional%20logo%20for%20gaming%20community&image_size=square" />
+    <link rel="mask-icon" href="./vite.svg" color="#ffffff" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     
-    <!-- 预加载关键CSS -->
-    <link rel="preload" href="/src/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="/src/style.css"></noscript>
+    <!-- 字体预加载 -->
+
     
     <title>PUBG Spark Squad - 游戏小群体交流分享平台</title>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js" defer></script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

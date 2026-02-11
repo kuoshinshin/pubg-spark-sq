@@ -1,42 +1,9 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { shareApi } from '../../services/api'
 
-// 模拟分享帖子数据
-const posts = ref([
-  {
-    id: 1,
-    title: '今天的吃鸡之旅',
-    content: '今天和队友一起开黑，连续吃了两把鸡，感觉状态非常好！特别是最后一把，我用98K远距离爆头，简直帅呆了。',
-    image: 'https://picsum.photos/seed/pubg3/800/450',
-    author: '队友1',
-    avatar: 'https://picsum.photos/seed/user2/200/200',
-    timestamp: '今天 18:30',
-    likes: 12,
-    comments: 3
-  },
-  {
-    id: 2,
-    title: '新赛季开始了',
-    content: '新赛季开始了，大家都什么段位了？我目前铂金，目标是这个赛季上钻石！',
-    image: 'https://picsum.photos/seed/pubg4/800/450',
-    author: '队友2',
-    avatar: 'https://picsum.photos/seed/user3/200/200',
-    timestamp: '昨天 20:15',
-    likes: 8,
-    comments: 5
-  },
-  {
-    id: 3,
-    title: '分享一个有趣的bug',
-    content: '今天遇到了一个非常有趣的bug，我竟然可以在天上飞！虽然知道这是bug，但还是玩得很开心，哈哈。',
-    image: 'https://picsum.photos/seed/pubg5/800/450',
-    author: '队友3',
-    avatar: 'https://picsum.photos/seed/user4/200/200',
-    timestamp: '2天前',
-    likes: 15,
-    comments: 8
-  }
-])
+// 帖子数据
+const posts = ref([])
 
 // 发布帖子的表单数据
 const newPost = ref({
@@ -47,30 +14,36 @@ const newPost = ref({
 
 const isPosting = ref(false)
 const showPostForm = ref(false)
+const isLoading = ref(false)
+const error = ref('')
+
+// 获取帖子列表
+const fetchPosts = async () => {
+  isLoading.value = true
+  error.value = ''
+  try {
+    const data = await shareApi.getPosts()
+    posts.value = data
+  } catch (err) {
+    error.value = '获取帖子失败'
+    console.error('Failed to fetch posts:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
 
 // 发布新帖子
-const handlePost = () => {
+const handlePost = async () => {
   if (!newPost.value.title.trim() || !newPost.value.content.trim()) {
     alert('标题和内容不能为空！')
     return
   }
   
   isPosting.value = true
+  error.value = ''
   
-  // 模拟发布请求
-  setTimeout(() => {
-    const post = {
-      id: Date.now(),
-      title: newPost.value.title.trim(),
-      content: newPost.value.content.trim(),
-      image: newPost.value.image || 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=PUBG%20generic%20post%20minimal%20design&image_size=landscape_16_9',
-      author: '我',
-      avatar: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=PUBG%20player%20avatar%20minimal%20design&image_size=square',
-      timestamp: '刚刚',
-      likes: 0,
-      comments: 0
-    }
-    
+  try {
+    const post = await shareApi.createPost(newPost.value)
     posts.value.unshift(post)
     
     // 重置表单
@@ -81,10 +54,13 @@ const handlePost = () => {
     }
     
     showPostForm.value = false
-    isPosting.value = false
-    
     alert('帖子发布成功！')
-  }, 1000)
+  } catch (err) {
+    error.value = '发布帖子失败'
+    console.error('Failed to create post:', err)
+  } finally {
+    isPosting.value = false
+  }
 }
 
 // 切换发布表单显示
@@ -93,12 +69,49 @@ const togglePostForm = () => {
 }
 
 // 点赞帖子
-const handleLike = (postId) => {
-  const post = posts.value.find(p => p.id === postId)
-  if (post) {
-    post.likes++
+const handleLike = async (postId) => {
+  try {
+    const updatedPost = await shareApi.likePost(postId)
+    const post = posts.value.find(p => p.id === postId)
+    if (post) {
+      Object.assign(post, updatedPost)
+    }
+  } catch (err) {
+    console.error('Failed to like post:', err)
   }
 }
+
+// 从URL获取postId参数
+const getPostIdFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const postId = urlParams.get('id')
+  return postId ? parseInt(postId) : null
+}
+
+// 滚动到指定帖子
+const scrollToPost = (postId) => {
+  setTimeout(() => {
+    const postElement = document.querySelector(`.post-item[data-post-id="${postId}"]`)
+    if (postElement) {
+      postElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // 添加高亮效果
+      postElement.classList.add('highlighted')
+      setTimeout(() => {
+        postElement.classList.remove('highlighted')
+      }, 2000)
+    }
+  }, 100)
+}
+
+// 组件挂载时获取帖子
+onMounted(() => {
+  fetchPosts().then(() => {
+    const postId = getPostIdFromUrl()
+    if (postId) {
+      scrollToPost(postId)
+    }
+  })
+})
 </script>
 
 <template>
@@ -156,12 +169,26 @@ const handleLike = (postId) => {
         </form>
       </div>
       
+      <!-- 错误信息 -->
+      <div v-if="error" class="error-message">
+        {{ error }}
+      </div>
+      
+      <!-- 加载状态 -->
+      <div v-if="isLoading" class="loading-state">
+        加载中...
+      </div>
+      
       <!-- 帖子列表 -->
-      <div class="posts-list">
+      <div v-else class="posts-list">
+        <div v-if="posts.length === 0" class="empty-state">
+          暂无帖子，快来发布第一条吧！
+        </div>
         <div 
           v-for="post in posts" 
           :key="post.id" 
           class="post-item"
+          :data-post-id="post.id"
         >
           <div class="post-header">
             <div class="post-author">
@@ -308,6 +335,23 @@ const handleLike = (postId) => {
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
 }
 
+/* 高亮效果 */
+.post-item.highlighted {
+  animation: highlight 2s ease-in-out;
+}
+
+@keyframes highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(0, 113, 227, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 113, 227, 0);
+  }
+}
+
 .post-header {
   margin-bottom: 1.5rem;
 }
@@ -400,6 +444,33 @@ const handleLike = (postId) => {
   font-size: 1rem;
 }
 
+/* 加载状态和错误信息 */
+.loading-state {
+  text-align: center;
+  padding: 4rem;
+  color: #86868b;
+  font-size: 1.125rem;
+}
+
+.error-message {
+  background-color: #ffcccc;
+  color: #cc0000;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 6rem;
+  color: #86868b;
+  font-size: 1.25rem;
+  background-color: #f9f9f9;
+  border-radius: 12px;
+  margin: 2rem 0;
+}
+
 @media (max-width: 768px) {
   .share-header {
     text-align: center;
@@ -427,6 +498,10 @@ const handleLike = (postId) => {
   
   .post-actions {
     justify-content: space-between;
+  }
+  
+  .empty-state {
+    padding: 4rem 2rem;
   }
 }
 </style>

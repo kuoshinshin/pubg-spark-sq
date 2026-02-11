@@ -1,791 +1,243 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { ElMessage, ElIcon, ElInput, ElButton, ElMessageBox } from 'element-plus'
+import { Edit } from '@element-plus/icons-vue'
+import { matchApi } from '../../services/api'
 
-// 左侧导航树数据
-const treeItems = ref([
-  {
-    id: 'history',
-    label: '历史赛季',
-    children: [
-      { id: 's1', label: '星火计划S1' },
-      { id: 's2', label: '星火计划S2' },
-      { id: 's3', label: '星火计划S3' }
-    ]
-  },
-  {
-    id: 'registration',
-    label: '赛季报名'
-  },
-  {
-    id: 'rules',
-    label: '比赛规则'
+// 基础变量声明（在计算属性之前）
+const selectedNode = ref('player-card')
+const seasonData = ref({})
+const registrationData = ref([])
+const rulesData = ref('')
+const personalData = ref({
+  totalMatches: 0,
+  totalKills: 0,
+  totalWins: 0,
+  kdRatio: 0,
+  bestRank: 0,
+  matchHistory: []
+})
+const ongoingMatches = ref([])
+const playerCardData = ref({
+  name: '',
+  gameId: '',
+  phone: '',
+  address: '',
+  company: '',
+  uuid: ''
+})
+const loading = ref(false)
+
+// 选手卡编辑状态 - 当前编辑的字段
+const editingField = ref(null)
+
+// 输入框引用
+const inputRefs = {
+  name: ref(null),
+  gameId: ref(null),
+  phone: ref(null),
+  address: ref(null),
+  company: ref(null)
+}
+
+
+
+// 计算显示的菜单项
+const displayMenuItems = computed(() => {
+  const items = []
+  
+  // 如果有正在参加的比赛，显示在第一个
+  if (ongoingMatches.value.length > 0) {
+    items.push({
+      id: 'ongoing',
+      label: '正在参加'
+    })
   }
+  
+  // 依次添加其他菜单项
+  items.push(
+    {
+      id: 'player-card',
+      label: '选手卡'
+    },
+    {
+      id: 'personal',
+      label: '个人数据'
+    },
+    {
+      id: 'history',
+      label: '历史赛季',
+      children: [
+        { id: 's1', label: '星火计划S1' },
+        { id: 's2', label: '星火计划S2' },
+        { id: 's3', label: '星火计划S3' }
+      ]
+    },
+    {
+      id: 'rules',
+      label: '比赛规则'
+    }
+  )
+  
+  return items
+})
 
-])
-
-// 当前选中的树节点
-const selectedNode = ref('s1')
-
-// 历史赛季数据
-const seasonData = ref({
-  s1: {
-    champions: [
-      { rank: 1, team: '桑勤鸣队', points: 120 },
-      { rank: 2, team: '刘志队', points: 95 },
-      { rank: 3, team: '郭正阳队', points: 80 }
-    ],
-    teams: [
-      {
-        id: 1,
-        name: '桑勤鸣队',
-        players: [
-          { name: '桑勤鸣', kills: 15 },
-          { name: '刘志', kills: 12 },
-          { name: '郭正阳', kills: 8 },
-          { name: '郭鑫鑫', kills: 5 }
-        ]
-      },
-      {
-        id: 2,
-        name: '刘志队',
-        players: [
-          { name: '刘志', kills: 18 },
-          { name: '胡成', kills: 10 },
-          { name: '陈红喜', kills: 7 },
-          { name: '桑勤鸣', kills: 4 }
-        ]
-      },
-      {
-        id: 3,
-        name: '郭正阳队',
-        players: [
-          { name: '郭正阳', kills: 12 },
-          { name: '郭鑫鑫', kills: 9 },
-          { name: '胡成', kills: 6 },
-          { name: '陈红喜', kills: 3 }
-        ]
-      },
-      {
-        id: 4,
-        name: '郭鑫鑫队',
-        players: [
-          { name: '郭鑫鑫', kills: 10 },
-          { name: '桑勤鸣', kills: 8 },
-          { name: '刘志', kills: 5 },
-          { name: '胡成', kills: 2 }
-        ]
-      },
-      {
-        id: 5,
-        name: '胡成队',
-        players: [
-          { name: '胡成', kills: 9 },
-          { name: '陈红喜', kills: 7 },
-          { name: '桑勤鸣', kills: 4 },
-          { name: '刘志', kills: 1 }
-        ]
-      },
-      {
-        id: 6,
-        name: '陈红喜队',
-        players: [
-          { name: '陈红喜', kills: 8 },
-          { name: '桑勤鸣', kills: 6 },
-          { name: '刘志', kills: 3 },
-          { name: '郭正阳', kills: 0 }
-        ]
-      },
-      {
-        id: 7,
-        name: '星火队1',
-        players: [
-          { name: '桑勤鸣', kills: 7 },
-          { name: '郭鑫鑫', kills: 5 },
-          { name: '胡成', kills: 2 },
-          { name: '陈红喜', kills: 0 }
-        ]
-      },
-      {
-        id: 8,
-        name: '星火队2',
-        players: [
-          { name: '刘志', kills: 6 },
-          { name: '郭正阳', kills: 4 },
-          { name: '桑勤鸣', kills: 1 },
-          { name: '郭鑫鑫', kills: 0 }
-        ]
-      },
-      {
-        id: 9,
-        name: '星火队3',
-        players: [
-          { name: '郭正阳', kills: 5 },
-          { name: '胡成', kills: 3 },
-          { name: '刘志', kills: 0 },
-          { name: '陈红喜', kills: 0 }
-        ]
-      },
-      {
-        id: 10,
-        name: '星火队4',
-        players: [
-          { name: '郭鑫鑫', kills: 4 },
-          { name: '陈红喜', kills: 2 },
-          { name: '郭正阳', kills: 0 },
-          { name: '桑勤鸣', kills: 0 }
-        ]
-      },
-      {
-        id: 11,
-        name: '星火队5',
-        players: [
-          { name: '胡成', kills: 3 },
-          { name: '桑勤鸣', kills: 1 },
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '刘志', kills: 0 }
-        ]
-      },
-      {
-        id: 12,
-        name: '星火队6',
-        players: [
-          { name: '陈红喜', kills: 2 },
-          { name: '刘志', kills: 0 },
-          { name: '胡成', kills: 0 },
-          { name: '郭正阳', kills: 0 }
-        ]
-      },
-      {
-        id: 13,
-        name: '星火队7',
-        players: [
-          { name: '桑勤鸣', kills: 1 },
-          { name: '郭正阳', kills: 0 },
-          { name: '陈红喜', kills: 0 },
-          { name: '郭鑫鑫', kills: 0 }
-        ]
-      },
-      {
-        id: 14,
-        name: '星火队8',
-        players: [
-          { name: '刘志', kills: 0 },
-          { name: '桑勤鸣', kills: 0 },
-          { name: '胡成', kills: 0 },
-          { name: '陈红喜', kills: 0 }
-        ]
-      },
-      {
-        id: 15,
-        name: '星火队9',
-        players: [
-          { name: '郭正阳', kills: 0 },
-          { name: '刘志', kills: 0 },
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '胡成', kills: 0 }
-        ]
-      },
-      {
-        id: 16,
-        name: '星火队10',
-        players: [
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '陈红喜', kills: 0 },
-          { name: '桑勤鸣', kills: 0 },
-          { name: '刘志', kills: 0 }
-        ]
-      }
-    ]
-  },
-  s2: {
-    champions: [
-      { rank: 1, team: '胡成队', points: 135 },
-      { rank: 2, team: '陈红喜队', points: 110 },
-      { rank: 3, team: '桑勤鸣队', points: 90 }
-    ],
-    teams: [
-      {
-        id: 1,
-        name: '胡成队',
-        players: [
-          { name: '胡成', kills: 20 },
-          { name: '陈红喜', kills: 15 },
-          { name: '桑勤鸣', kills: 10 },
-          { name: '刘志', kills: 5 }
-        ]
-      },
-      {
-        id: 2,
-        name: '陈红喜队',
-        players: [
-          { name: '陈红喜', kills: 18 },
-          { name: '郭正阳', kills: 12 },
-          { name: '郭鑫鑫', kills: 8 },
-          { name: '胡成', kills: 4 }
-        ]
-      },
-      {
-        id: 3,
-        name: '桑勤鸣队',
-        players: [
-          { name: '桑勤鸣', kills: 16 },
-          { name: '刘志', kills: 10 },
-          { name: '郭正阳', kills: 6 },
-          { name: '郭鑫鑫', kills: 2 }
-        ]
-      },
-      {
-        id: 4,
-        name: '刘志队',
-        players: [
-          { name: '刘志', kills: 14 },
-          { name: '郭鑫鑫', kills: 9 },
-          { name: '胡成', kills: 5 },
-          { name: '陈红喜', kills: 1 }
-        ]
-      },
-      {
-        id: 5,
-        name: '郭正阳队',
-        players: [
-          { name: '郭正阳', kills: 12 },
-          { name: '桑勤鸣', kills: 8 },
-          { name: '刘志', kills: 4 },
-          { name: '郭鑫鑫', kills: 0 }
-        ]
-      },
-      {
-        id: 6,
-        name: '郭鑫鑫队',
-        players: [
-          { name: '郭鑫鑫', kills: 10 },
-          { name: '胡成', kills: 6 },
-          { name: '陈红喜', kills: 3 },
-          { name: '桑勤鸣', kills: 0 }
-        ]
-      },
-      {
-        id: 7,
-        name: '星火队11',
-        players: [
-          { name: '陈红喜', kills: 9 },
-          { name: '桑勤鸣', kills: 5 },
-          { name: '刘志', kills: 2 },
-          { name: '郭正阳', kills: 0 }
-        ]
-      },
-      {
-        id: 8,
-        name: '星火队12',
-        players: [
-          { name: '胡成', kills: 8 },
-          { name: '郭鑫鑫', kills: 4 },
-          { name: '陈红喜', kills: 1 },
-          { name: '桑勤鸣', kills: 0 }
-        ]
-      },
-      {
-        id: 9,
-        name: '星火队13',
-        players: [
-          { name: '郭正阳', kills: 7 },
-          { name: '刘志', kills: 3 },
-          { name: '胡成', kills: 0 },
-          { name: '陈红喜', kills: 0 }
-        ]
-      },
-      {
-        id: 10,
-        name: '星火队14',
-        players: [
-          { name: '桑勤鸣', kills: 6 },
-          { name: '郭鑫鑫', kills: 2 },
-          { name: '陈红喜', kills: 0 },
-          { name: '胡成', kills: 0 }
-        ]
-      },
-      {
-        id: 11,
-        name: '星火队15',
-        players: [
-          { name: '刘志', kills: 5 },
-          { name: '桑勤鸣', kills: 1 },
-          { name: '郭正阳', kills: 0 },
-          { name: '郭鑫鑫', kills: 0 }
-        ]
-      },
-      {
-        id: 12,
-        name: '星火队16',
-        players: [
-          { name: '陈红喜', kills: 4 },
-          { name: '胡成', kills: 0 },
-          { name: '刘志', kills: 0 },
-          { name: '桑勤鸣', kills: 0 }
-        ]
-      },
-      {
-        id: 13,
-        name: '星火队17',
-        players: [
-          { name: '郭鑫鑫', kills: 3 },
-          { name: '陈红喜', kills: 0 },
-          { name: '胡成', kills: 0 },
-          { name: '刘志', kills: 0 }
-        ]
-      },
-      {
-        id: 14,
-        name: '星火队18',
-        players: [
-          { name: '郭正阳', kills: 2 },
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '桑勤鸣', kills: 0 },
-          { name: '刘志', kills: 0 }
-        ]
-      },
-      {
-        id: 15,
-        name: '星火队19',
-        players: [
-          { name: '桑勤鸣', kills: 1 },
-          { name: '陈红喜', kills: 0 },
-          { name: '胡成', kills: 0 },
-          { name: '郭正阳', kills: 0 }
-        ]
-      },
-      {
-        id: 16,
-        name: '星火队20',
-        players: [
-          { name: '刘志', kills: 0 },
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '陈红喜', kills: 0 },
-          { name: '胡成', kills: 0 }
-        ]
-      }
-    ]
-  },
-  s3: {
-    champions: [
-      { rank: 1, team: '郭鑫鑫队', points: 140 },
-      { rank: 2, team: '胡成队', points: 115 },
-      { rank: 3, team: '陈红喜队', points: 95 }
-    ],
-    teams: [
-      {
-        id: 1,
-        name: '郭鑫鑫队',
-        players: [
-          { name: '郭鑫鑫', kills: 22 },
-          { name: '桑勤鸣', kills: 18 },
-          { name: '刘志', kills: 12 },
-          { name: '郭正阳', kills: 6 }
-        ]
-      },
-      {
-        id: 2,
-        name: '胡成队',
-        players: [
-          { name: '胡成', kills: 20 },
-          { name: '陈红喜', kills: 14 },
-          { name: '郭正阳', kills: 8 },
-          { name: '郭鑫鑫', kills: 4 }
-        ]
-      },
-      {
-        id: 3,
-        name: '陈红喜队',
-        players: [
-          { name: '陈红喜', kills: 18 },
-          { name: '桑勤鸣', kills: 12 },
-          { name: '刘志', kills: 6 },
-          { name: '胡成', kills: 2 }
-        ]
-      },
-      {
-        id: 4,
-        name: '桑勤鸣队',
-        players: [
-          { name: '桑勤鸣', kills: 16 },
-          { name: '郭正阳', kills: 10 },
-          { name: '郭鑫鑫', kills: 5 },
-          { name: '陈红喜', kills: 1 }
-        ]
-      },
-      {
-        id: 5,
-        name: '刘志队',
-        players: [
-          { name: '刘志', kills: 14 },
-          { name: '胡成', kills: 9 },
-          { name: '陈红喜', kills: 4 },
-          { name: '桑勤鸣', kills: 0 }
-        ]
-      },
-      {
-        id: 6,
-        name: '郭正阳队',
-        players: [
-          { name: '郭正阳', kills: 12 },
-          { name: '桑勤鸣', kills: 8 },
-          { name: '刘志', kills: 3 },
-          { name: '胡成', kills: 0 }
-        ]
-      },
-      {
-        id: 7,
-        name: '星火队21',
-        players: [
-          { name: '胡成', kills: 10 },
-          { name: '郭鑫鑫', kills: 6 },
-          { name: '陈红喜', kills: 2 },
-          { name: '桑勤鸣', kills: 0 }
-        ]
-      },
-      {
-        id: 8,
-        name: '星火队22',
-        players: [
-          { name: '陈红喜', kills: 9 },
-          { name: '刘志', kills: 5 },
-          { name: '郭正阳', kills: 1 },
-          { name: '郭鑫鑫', kills: 0 }
-        ]
-      },
-      {
-        id: 9,
-        name: '星火队23',
-        players: [
-          { name: '桑勤鸣', kills: 8 },
-          { name: '陈红喜', kills: 4 },
-          { name: '胡成', kills: 0 },
-          { name: '刘志', kills: 0 }
-        ]
-      },
-      {
-        id: 10,
-        name: '星火队24',
-        players: [
-          { name: '郭鑫鑫', kills: 7 },
-          { name: '郭正阳', kills: 3 },
-          { name: '桑勤鸣', kills: 0 },
-          { name: '刘志', kills: 0 }
-        ]
-      },
-      {
-        id: 11,
-        name: '星火队25',
-        players: [
-          { name: '刘志', kills: 6 },
-          { name: '胡成', kills: 2 },
-          { name: '陈红喜', kills: 0 },
-          { name: '郭正阳', kills: 0 }
-        ]
-      },
-      {
-        id: 12,
-        name: '星火队26',
-        players: [
-          { name: '郭正阳', kills: 5 },
-          { name: '桑勤鸣', kills: 1 },
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '胡成', kills: 0 }
-        ]
-      },
-      {
-        id: 13,
-        name: '星火队27',
-        players: [
-          { name: '桑勤鸣', kills: 4 },
-          { name: '陈红喜', kills: 0 },
-          { name: '刘志', kills: 0 },
-          { name: '郭正阳', kills: 0 }
-        ]
-      },
-      {
-        id: 14,
-        name: '星火队28',
-        players: [
-          { name: '胡成', kills: 3 },
-          { name: '郭鑫鑫', kills: 0 },
-          { name: '桑勤鸣', kills: 0 },
-          { name: '陈红喜', kills: 0 }
-        ]
-      },
-      {
-        id: 15,
-        name: '星火队29',
-        players: [
-          { name: '陈红喜', kills: 2 },
-          { name: '刘志', kills: 0 },
-          { name: '郭正阳', kills: 0 },
-          { name: '郭鑫鑫', kills: 0 }
-        ]
-      },
-      {
-        id: 16,
-        name: '星火队30',
-        players: [
-          { name: '郭鑫鑫', kills: 1 },
-          { name: '郭正阳', kills: 0 },
-          { name: '胡成', kills: 0 },
-          { name: '陈红喜', kills: 0 }
-        ]
-      }
-    ]
+// 监听编辑字段变化，自动聚焦输入框
+watch(editingField, (newField) => {
+  if (newField && inputRefs[newField]) {
+    // 使用nextTick确保DOM已更新
+    setTimeout(() => {
+      inputRefs[newField].value?.focus()
+    }, 50)
   }
 })
 
-// 赛季报名数据
-const registrationData = ref([
-  {
-    id: 1,
-    name: 'Team 1',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Team 2',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 3,
-    name: 'Team 3',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 4,
-    name: 'Team 4',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 5,
-    name: 'Team 5',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 6,
-    name: 'Team 6',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 7,
-    name: 'Team 7',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 8,
-    name: 'Team 8',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 9,
-    name: 'Team 9',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 10,
-    name: 'Team 10',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 11,
-    name: 'Team 11',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 12,
-    name: 'Team 12',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 13,
-    name: 'Team 13',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 14,
-    name: 'Team 14',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 15,
-    name: 'Team 15',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
-  },
-  {
-    id: 16,
-    name: 'Team 16',
-    players: [
-      { id: 1, position: '队员1', name: '', editable: true },
-      { id: 2, position: '队员2', name: '', editable: true },
-      { id: 3, position: '队员3', name: '', editable: true },
-      { id: 4, position: '队员4', name: '', editable: true },
-      { id: 5, position: '替补', name: '', editable: true }
-    ]
+// 组件挂载时获取默认数据
+onMounted(async () => {
+  await fetchOngoingMatches() // 先获取正在参加的比赛，用于计算菜单
+  await fetchPlayerCardData() // 获取选手卡数据，因为默认显示选手卡页面
+})
+
+
+// 从后端获取赛季数据
+const fetchSeasonData = async (seasonId) => {
+  loading.value = true
+  try {
+    const data = await matchApi.getSeasonData(seasonId)
+    seasonData.value[seasonId] = data
+  } catch (err) {
+    ElMessage.error('获取赛季数据失败')
+    console.error('Failed to fetch season data:', err)
+  } finally {
+    loading.value = false
   }
-])
+}
 
-// 比赛规则数据（PUBG PGS赛事规则）
-const rulesData = ref(`# PUBG PGS 赛事规则
+// 从后端获取报名数据
+const fetchRegistrationData = async () => {
+  loading.value = true
+  try {
+    const data = await matchApi.getRegistrationData()
+    registrationData.value = data
+  } catch (err) {
+    ElMessage.error('获取报名数据失败')
+    console.error('Failed to fetch registration data:', err)
+  } finally {
+    loading.value = false
+  }
+}
 
-## 1. 赛事概述
-PUBG Global Series (PGS) 是 PUBG 官方举办的全球性职业赛事，汇聚来自世界各地的顶尖战队，争夺高额奖金和荣誉。
+// 从后端获取规则数据
+const fetchRulesData = async () => {
+  loading.value = true
+  try {
+    const data = await matchApi.getRulesData()
+    rulesData.value = data
+  } catch (err) {
+    ElMessage.error('获取规则数据失败')
+    console.error('Failed to fetch rules data:', err)
+  } finally {
+    loading.value = false
+  }
+}
 
-## 2. 参赛资格
-- 各地区预选赛优胜队伍
-- 直接邀请的顶级战队
-- 每个队伍由4名正式队员和1名替补队员组成
+// 从后端获取选手卡数据
+const fetchPlayerCardData = async () => {
+  loading.value = true
+  try {
+    const data = await matchApi.getPlayerCardData()
+    playerCardData.value = {
+      ...playerCardData.value,
+      ...data
+    }
+  } catch (err) {
+    ElMessage.error('获取选手卡数据失败')
+    console.error('Failed to fetch player card data:', err)
+  } finally {
+    loading.value = false
+  }
+}
 
-## 3. 比赛模式
-- 采用标准竞技模式
-- 使用最新版本的游戏客户端
-- 地图轮换：Erangel、Miramar、Sanhok、Vikendi、Karakin、Deston
+// 保存选手卡数据
+const savePlayerCardData = async () => {
+  // 校验必填项
+  const missingFields = []
+  if (!playerCardData.value.name) missingFields.push('姓名')
+  if (!playerCardData.value.gameId) missingFields.push('游戏ID')
+  if (!playerCardData.value.phone) missingFields.push('电话')
+  if (!playerCardData.value.address) missingFields.push('居住地址')
+  if (!playerCardData.value.company) missingFields.push('所属公司')
+  
+  if (missingFields.length > 0) {
+    ElMessage.warning(`请填写以下字段：${missingFields.join('、')}`)
+    return
+  }
+  
+  loading.value = true
+  try {
+    const result = await matchApi.savePlayerCardData(playerCardData.value)
+    // 保存后端返回的 uuid
+    if (result.uuid) {
+      playerCardData.value.uuid = result.uuid
+    }
+    ElMessage.success('保存成功')
+  } catch (err) {
+    ElMessage.error('保存失败')
+    console.error('Failed to save player card data:', err)
+  } finally {
+    loading.value = false
+  }
+}
 
-## 4. 积分规则
-- 排名分：根据每局比赛的最终排名获得积分
-- 击杀分：每击杀一名敌人获得1分
-- 首杀额外加1分
+// 保存单个字段（已废弃，使用保存按钮）
+const saveField = async (fieldName) => {
+  // 空实现，已废弃
+}
 
-## 5. 排名积分表
-1. 第1名：15分
-2. 第2名：12分
-3. 第3名：10分
-4. 第4名：8分
-5. 第5名：7分
-6. 第6名：6分
-7. 第7-8名：5分
-8. 第9-12名：3分
-9. 第13-16名：2分
-10. 第17-20名：1分
+// 从后端获取个人比赛数据
+const fetchPersonalData = async () => {
+  loading.value = true
+  try {
+    const data = await matchApi.getPersonalData()
+    personalData.value = data
+  } catch (err) {
+    ElMessage.error('获取个人比赛数据失败')
+    console.error('Failed to fetch personal data:', err)
+  } finally {
+    loading.value = false
+  }
+}
 
-## 6. 赛事流程
-1. 小组赛：所有队伍分为多个小组进行单循环比赛
-2. 淘汰赛：小组前几名晋级淘汰赛
-3. 总决赛：最终的16支队伍进行决赛，决出总冠军
-
-## 7. 规则变更
-- 赛事组委会有权根据实际情况调整规则
-- 所有规则变更将提前通知参赛队伍
-
-## 8. 申诉机制
-- 比赛中遇到问题可向裁判提出申诉
-- 申诉必须在比赛结束后30分钟内提交
-- 裁判的判决为最终判决
-
-## 9. 纪律处分
-- 违反规则的队伍将受到警告、扣分或取消资格的处罚
-- 严重违规将被禁赛
-
-## 10. 其他
-- 所有参赛选手必须遵守主办方的防疫规定
-- 赛事最终解释权归主办方所有`)
-
-// 处理树节点点击
-const handleNodeClick = (nodeId) => {
-  selectedNode.value = nodeId
+// 从后端获取正在参加的比赛
+const fetchOngoingMatches = async () => {
+  loading.value = true
+  try {
+    const data = await matchApi.getOngoingMatches()
+    ongoingMatches.value = data
+  } catch (err) {
+    ElMessage.error('获取正在参加的比赛失败')
+    console.error('Failed to fetch ongoing matches:', err)
+  } finally {
+    loading.value = false
+  }
 }
 
 // 保存选手信息
-const savePlayerName = (teamId, playerId, name) => {
-  const team = registrationData.value.find(t => t.id === teamId)
-  if (team) {
-    const player = team.players.find(p => p.id === playerId)
-    if (player) {
-      player.name = name
-      player.editable = false
+const savePlayerName = async (teamId, playerId, name) => {
+  try {
+    await matchApi.updatePlayerName(teamId, playerId, name)
+    const team = registrationData.value.find(t => t.id === teamId)
+    if (team) {
+      const player = team.players.find(p => p.id === playerId)
+      if (player) {
+        player.name = name
+        player.editable = false
+      }
     }
+    ElMessage.success('保存成功')
+  } catch (err) {
+    ElMessage.error('保存选手信息失败')
+    console.error('Failed to save player name:', err)
   }
 }
 
@@ -800,6 +252,29 @@ const editPlayerName = (teamId, playerId) => {
   }
 }
 
+// 处理树节点点击
+const handleNodeClick = async (nodeId) => {
+  selectedNode.value = nodeId
+  
+  // 根据选择的节点获取对应数据
+  if (nodeId === 's1' || nodeId === 's2' || nodeId === 's3') {
+    if (!seasonData.value[nodeId]) {
+      await fetchSeasonData(nodeId)
+    }
+  } else if (nodeId === 'personal') {
+    await fetchPersonalData()
+  } else if (nodeId === 'ongoing') {
+    await fetchOngoingMatches()
+  } else if (nodeId === 'rules') {
+    if (!rulesData.value) {
+      await fetchRulesData()
+    }
+  } else if (nodeId === 'player-card') {
+    await fetchPlayerCardData()
+  }
+}
+
+
 
 </script>
 
@@ -809,51 +284,52 @@ const editPlayerName = (teamId, playerId) => {
       <div class="match-layout">
         <!-- 左侧导航树 -->
         <div class="match-sidebar">
-          <h3>比赛管理</h3>
-          <ul class="tree-nav">
-            <li class="tree-item">
-              <span class="tree-label">{{ treeItems[0].label }}</span>
-              <ul class="tree-children">
-                <li 
-                  v-for="child in treeItems[0].children" 
+          <el-menu
+            :default-active="selectedNode"
+            class="el-menu-vertical-demo"
+            :router="false"
+            @select="handleNodeClick"
+          >
+            <template v-for="item in displayMenuItems" :key="item.id">
+              <el-sub-menu v-if="item.children" :index="item.id">
+                <template #title>
+                  <span>{{ item.label }}</span>
+                </template>
+                <el-menu-item
+                  v-for="child in item.children"
                   :key="child.id"
-                  class="tree-child-item"
-                  :class="{ 'active': selectedNode === child.id }"
-                  @click="handleNodeClick(child.id)"
+                  :index="child.id"
                 >
                   {{ child.label }}
-                </li>
-              </ul>
-            </li>
-            <li 
-              class="tree-item"
-              :class="{ 'active': selectedNode === treeItems[1].id }"
-              @click="handleNodeClick(treeItems[1].id)"
-            >
-              <span class="tree-label">{{ treeItems[1].label }}</span>
-            </li>
-            <li 
-              class="tree-item"
-              :class="{ 'active': selectedNode === treeItems[2].id }"
-              @click="handleNodeClick(treeItems[2].id)"
-            >
-              <span class="tree-label">{{ treeItems[2].label }}</span>
-            </li>
-          </ul>
+                </el-menu-item>
+              </el-sub-menu>
+              <el-menu-item v-else :index="item.id">
+                {{ item.label }}
+              </el-menu-item>
+            </template>
+          </el-menu>
         </div>
         
         <!-- 右侧内容区域 -->
         <div class="match-content">
+          <!-- 错误信息 -->
+          <!-- 使用 Element UI 的 el-message 组件替代 -->
+          
+          <!-- 加载状态 -->
+          <div v-if="loading" class="loading-state">
+            加载中...
+          </div>
+          
           <!-- 历史赛季内容 -->
-          <div v-if="selectedNode === 's1' || selectedNode === 's2' || selectedNode === 's3'" class="history-content">
-            <h2>{{ treeItems[0].children.find(child => child.id === selectedNode)?.label }}</h2>
+          <div v-else-if="selectedNode === 's1' || selectedNode === 's2' || selectedNode === 's3'" class="history-content">
+            <h2>{{ selectedNode === 's1' ? '星火计划S1' : selectedNode === 's2' ? '星火计划S2' : '星火计划S3' }}</h2>
             
             <!-- 前三名展示 -->
             <div class="champions-section">
               <h3>赛季排名</h3>
               <div class="champions-grid">
                 <div 
-                  v-for="champion in seasonData[selectedNode].champions" 
+                  v-for="champion in seasonData[selectedNode]?.champions" 
                   :key="champion.rank"
                   class="champion-card"
                   :class="{ 'first': champion.rank === 1, 'second': champion.rank === 2, 'third': champion.rank === 3 }"
@@ -870,7 +346,7 @@ const editPlayerName = (teamId, playerId) => {
               <h3>队伍详情</h3>
               <div class="teams-grid">
                 <div 
-                  v-for="team in seasonData[selectedNode].teams" 
+                  v-for="team in seasonData[selectedNode]?.teams" 
                   :key="team.id"
                   class="team-card"
                 >
@@ -892,50 +368,55 @@ const editPlayerName = (teamId, playerId) => {
             </div>
           </div>
           
-          <!-- 赛季报名内容 -->
-          <div v-else-if="selectedNode === 'registration'" class="registration-content">
-            <h2>{{ treeItems[1].label }}</h2>
-            <p>请为每个队伍的队员输入游戏ID</p>
+          <!-- 个人比赛数据 -->
+          <div v-else-if="selectedNode === 'personal'" class="personal-content">
+            <h2>个人数据</h2>
             
-            <div class="registration-teams">
-              <div 
-                v-for="team in registrationData" 
-                :key="team.id"
-                class="registration-team"
-              >
-                <h3>{{ team.name }}</h3>
-                <div class="team-players">
-                  <div 
-                    v-for="player in team.players" 
-                    :key="player.id"
-                    class="player-registration"
-                  >
-                    <span class="player-position">{{ player.position }}:</span>
-                    <div class="player-input">
-                      <input 
-                        v-if="player.editable"
-                        type="text"
-                        :value="player.name"
-                        @input="(e) => player.name = e.target.value"
-                        :placeholder="'输入游戏ID'"
-                      />
-                      <span v-else class="player-name-display">{{ player.name || '未设置' }}</span>
-                      <div class="player-actions">
-                        <button 
-                          v-if="player.editable"
-                          class="save-button"
-                          @click="savePlayerName(team.id, player.id, player.name)"
-                        >
-                          确认
-                        </button>
-                        <button 
-                          v-else
-                          class="edit-button"
-                          @click="editPlayerName(team.id, player.id)"
-                        >
-                          编辑
-                        </button>
-                      </div>
+            <!-- 个人统计 -->
+            <div class="personal-stats">
+              <h3>个人统计</h3>
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-value">{{ personalData.totalMatches }}</div>
+                  <div class="stat-label">总场次</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">{{ personalData.totalKills }}</div>
+                  <div class="stat-label">总击杀</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">{{ personalData.totalWins }}</div>
+                  <div class="stat-label">获胜场次</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">{{ personalData.kdRatio }}</div>
+                  <div class="stat-label">KD比率</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">{{ personalData.bestRank }}</div>
+                  <div class="stat-label">最佳排名</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 比赛历史 -->
+            <div class="match-history">
+              <h3>比赛历史</h3>
+              <div v-if="personalData.matchHistory.length === 0" class="empty-state">
+                暂无比赛记录
+              </div>
+              <div v-else class="match-history-list">
+                <div 
+                  v-for="match in personalData.matchHistory" 
+                  :key="match.id"
+                  class="match-history-item"
+                >
+                  <div class="match-info">
+                    <h4>{{ match.name }}</h4>
+                    <div class="match-details">
+                      <span>日期: {{ match.date }}</span>
+                      <span>排名: {{ match.rank }}</span>
+                      <span>击杀: {{ match.kills }}</span>
                     </div>
                   </div>
                 </div>
@@ -943,10 +424,181 @@ const editPlayerName = (teamId, playerId) => {
             </div>
           </div>
           
+          <!-- 正在参加的比赛 -->
+          <div v-else-if="selectedNode === 'ongoing'" class="ongoing-content">
+            <h2>正在参加</h2>
+            
+            <div v-if="ongoingMatches.length === 0" class="empty-state">
+              暂无正在参加的比赛
+            </div>
+            <div v-else class="ongoing-matches-list">
+              <div 
+                v-for="match in ongoingMatches" 
+                :key="match.id"
+                class="ongoing-match-card"
+              >
+                <div class="match-header">
+                  <h3>{{ match.name }}</h3>
+                  <span class="match-status">{{ match.status }}</span>
+                </div>
+                <div class="match-info">
+                  <div class="match-date">{{ match.date }}</div>
+                  <div class="match-location">{{ match.location }}</div>
+                  <div class="match-description">{{ match.description }}</div>
+                </div>
+                <div class="match-actions">
+                  <button class="details-button">查看详情</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- 比赛规则内容 -->
           <div v-else-if="selectedNode === 'rules'" class="rules-content">
-            <h2>{{ treeItems[2].label }}</h2>
+            <h2>比赛规则</h2>
             <div class="rules-text" v-html="rulesData.replace(/\n/g, '<br>').replace(/# (.*?)(?=\n|$)/g, '<h3>$1</h3>').replace(/## (.*?)(?=\n|$)/g, '<h4>$1</h4>')"></div>
+          </div>
+          
+          <!-- 选手卡内容 -->
+          <div v-else-if="selectedNode === 'player-card'" class="player-card-content">
+            <div class="player-card-description">
+              <p>1. 参加比赛需要先填写选手卡。</p>
+              <p>2. 居住地址请务必填写您现在能够收到快递的地址。</p>
+              <p>3. 你的电话地址信息我们只用于奖励发放。</p>
+            </div>
+            <div class="player-card-section">
+              <div class="card">
+                <div class="card-header">
+                  <h4>星火計劃 {{ new Date().getFullYear() }}</h4>
+                </div>
+                <div class="card-body">
+                  <div class="card-info">
+                    <div 
+                      class="info-item"
+                      :class="{ 'editing': editingField === 'name' }"
+                    >
+                      <span class="label">姓名:</span>
+                      <span 
+                        v-if="!editingField || editingField !== 'name'" 
+                        class="value"
+                        @click="editingField = 'name'"
+                      >
+                        {{ playerCardData.name || '点击编辑' }}
+                      </span>
+                      <el-input 
+                        v-else 
+                        v-model="playerCardData.name"
+                        size="small"
+                        class="card-input"
+                        placeholder="请输入姓名"
+                        @blur="editingField = null"
+                        ref="inputRefs.name"
+                      />
+                    </div>
+                    <div 
+                      class="info-item"
+                      :class="{ 'editing': editingField === 'gameId' }"
+                    >
+                      <span class="label">游戏ID:</span>
+                      <span 
+                        v-if="!editingField || editingField !== 'gameId'" 
+                        class="value"
+                        @click="editingField = 'gameId'"
+                      >
+                        {{ playerCardData.gameId || '点击编辑' }}
+                      </span>
+                      <el-input 
+                        v-else 
+                        v-model="playerCardData.gameId"
+                        size="small"
+                        class="card-input"
+                        placeholder="请输入游戏ID"
+                        @blur="editingField = null"
+                        ref="inputRefs.gameId"
+                      />
+                    </div>
+                    <div 
+                      class="info-item"
+                      :class="{ 'editing': editingField === 'phone' }"
+                    >
+                      <span class="label">电话:</span>
+                      <span 
+                        v-if="!editingField || editingField !== 'phone'" 
+                        class="value"
+                        @click="editingField = 'phone'"
+                      >
+                        {{ playerCardData.phone || '点击编辑' }}
+                      </span>
+                      <el-input 
+                        v-else 
+                        v-model="playerCardData.phone"
+                        size="small"
+                        class="card-input"
+                        placeholder="请输入电话"
+                        @blur="editingField = null"
+                        ref="inputRefs.phone"
+                      />
+                    </div>
+                    <div 
+                      class="info-item"
+                      :class="{ 'editing': editingField === 'address' }"
+                    >
+                      <span class="label">居住地址:</span>
+                      <span 
+                        v-if="!editingField || editingField !== 'address'" 
+                        class="value address-value"
+                        @click="editingField = 'address'"
+                      >
+                        {{ playerCardData.address || '点击编辑' }}
+                      </span>
+                      <el-input 
+                        v-else 
+                        v-model="playerCardData.address"
+                        size="small"
+                        class="card-input address-input"
+                        placeholder="请输入居住地址"
+                        @blur="editingField = null"
+                        ref="inputRefs.address"
+                      />
+                    </div>
+                    <div 
+                      class="info-item"
+                      :class="{ 'editing': editingField === 'company' }"
+                    >
+                      <span class="label">所属公司:</span>
+                      <span 
+                        v-if="!editingField || editingField !== 'company'" 
+                        class="value"
+                        @click="editingField = 'company'"
+                      >
+                        {{ playerCardData.company || '点击编辑' }}
+                      </span>
+                      <el-input 
+                        v-else 
+                        v-model="playerCardData.company"
+                        size="small"
+                        class="card-input"
+                        placeholder="请输入所属公司"
+                        @blur="editingField = null"
+                        ref="inputRefs.company"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="card-footer">
+                  <p>星火計劃 © {{ new Date().getFullYear() }}</p>
+                </div>
+              </div>
+              <!-- 保存按钮 -->
+              <div class="card-actions">
+                <el-button 
+                  type="primary" 
+                  @click="savePlayerCardData"
+                >
+                  保存选手卡
+                </el-button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -972,69 +624,75 @@ const editPlayerName = (teamId, playerId) => {
   flex-shrink: 0;
 }
 
-.match-sidebar h3 {
-  margin-bottom: 1.5rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1d1d1f;
+/* Element UI 菜单样式 */
+.el-menu-vertical-demo {
+  background-color: #ffffff !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+  border: none !important;
+  overflow: hidden !important;
 }
 
-.tree-nav {
-  background-color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
+.el-menu-vertical-demo:not(.el-menu--collapse) {
+  width: 250px !important;
 }
 
-.tree-item {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+.el-menu-item {
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
+  color: #1d1d1f !important;
+  height: 3.5rem !important;
+  line-height: 3.5rem !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
 }
 
-.tree-item:last-child {
-  border-bottom: none;
+.el-menu-item:hover {
+  background-color: #f5f5f7 !important;
+  color: #0071e3 !important;
 }
 
-.tree-label {
-  display: block;
-  padding: 1rem 1.5rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: #1d1d1f;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.el-menu-item.is-active {
+  background-color: #1d1d1f !important;
+  color: #ffffff !important;
 }
 
-.tree-item:hover .tree-label {
-  background-color: #f5f5f7;
-  color: #0071e3;
+.el-sub-menu__title {
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
+  color: #1d1d1f !important;
+  height: 3.5rem !important;
+  line-height: 3.5rem !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
 }
 
-.tree-item.active .tree-label {
-  background-color: #0071e3;
-  color: #ffffff;
+.el-sub-menu__title:hover {
+  background-color: #f5f5f7 !important;
+  color: #0071e3 !important;
 }
 
-.tree-children {
-  background-color: #f9f9f9;
+.el-sub-menu .el-menu {
+  background-color: #f9f9f9 !important;
 }
 
-.tree-child-item {
-  padding: 0.75rem 1.5rem 0.75rem 2.5rem;
-  font-size: 0.875rem;
-  color: #86868b;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.el-sub-menu .el-menu-item {
+  font-size: 0.875rem !important;
+  color: #86868b !important;
+  height: 2.75rem !important;
+  line-height: 2.75rem !important;
+  padding-left: 2.5rem !important;
 }
 
-.tree-child-item:hover {
-  background-color: #f0f0f0;
-  color: #0071e3;
+.el-sub-menu .el-menu-item:hover {
+  background-color: #f0f0f0 !important;
+  color: #0071e3 !important;
 }
 
-.tree-child-item.active {
-  background-color: #e8f0fe;
-  color: #0071e3;
-  font-weight: 500;
+.el-sub-menu .el-menu-item.is-active {
+  background-color: #1d1d1f !important;
+  color: #ffffff !important;
+  font-weight: 500 !important;
 }
 
 /* 右侧内容区域 */
@@ -1055,6 +713,16 @@ const editPlayerName = (teamId, playerId) => {
   font-weight: 600;
   color: #1d1d1f;
 }
+
+/* 加载状态和错误信息 */
+.loading-state {
+  text-align: center;
+  padding: 4rem;
+  color: #86868b;
+  font-size: 1.125rem;
+}
+
+/* 错误信息和成功信息样式已移除，改用 Element UI 的 ElMessage 组件 */
 
 /* 历史赛季内容 */
 .champions-section {
@@ -1169,115 +837,7 @@ const editPlayerName = (teamId, playerId) => {
   font-weight: 500;
 }
 
-/* 赛季报名内容 */
-.registration-content p {
-  margin-bottom: 2rem;
-  color: #86868b;
-  font-size: 1rem;
-}
 
-.registration-teams {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 2rem;
-}
-
-.registration-team {
-  background-color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 1.5rem;
-}
-
-.registration-team h3 {
-  margin-bottom: 1.5rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #1d1d1f;
-}
-
-.team-players {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.player-registration {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.player-position {
-  width: 60px;
-  font-size: 0.875rem;
-  color: #86868b;
-  font-weight: 500;
-}
-
-.player-input {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.player-input input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d2d2d7;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  transition: all 0.3s ease;
-}
-
-.player-input input:focus {
-  outline: none;
-  border-color: #0071e3;
-  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
-}
-
-.player-name-display {
-  flex: 1;
-  padding: 0.75rem 0;
-  font-size: 0.875rem;
-  color: #1d1d1f;
-  font-weight: 500;
-}
-
-.player-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.save-button, .edit-button {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: none;
-}
-
-.save-button {
-  background-color: #0071e3;
-  color: #ffffff;
-}
-
-.save-button:hover {
-  background-color: #0077ed;
-}
-
-.edit-button {
-  background-color: #f5f5f7;
-  color: #1d1d1f;
-  border: 1px solid #d2d2d7;
-}
-
-.edit-button:hover {
-  background-color: #ebebeb;
-}
 
 /* 比赛规则内容 */
 .rules-content {
@@ -1312,6 +872,362 @@ const editPlayerName = (teamId, playerId) => {
   margin-bottom: 1rem;
 }
 
+/* 个人比赛数据样式 */
+.personal-content {
+  padding: 1.5rem;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.personal-stats {
+  margin-bottom: 3rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.stat-card {
+  background-color: #f5f5f7;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: #86868b;
+}
+
+.match-history {
+  margin-top: 3rem;
+}
+
+.match-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.match-history-item {
+  background-color: #f5f5f7;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: transform 0.3s ease;
+}
+
+.match-history-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.match-info h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.match-details {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.875rem;
+  color: #86868b;
+}
+
+/* 正在参加的比赛样式 */
+.ongoing-content {
+  padding: 1.5rem;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.ongoing-matches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.ongoing-match-card {
+  background-color: #f5f5f7;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: transform 0.3s ease;
+}
+
+.ongoing-match-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.match-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.match-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.match-status {
+  padding: 0.25rem 0.75rem;
+  background-color: #0071e3;
+  color: #ffffff;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.match-info {
+  margin-bottom: 1.5rem;
+}
+
+.match-date {
+  font-size: 0.875rem;
+  color: #86868b;
+  margin-bottom: 0.5rem;
+}
+
+.match-location {
+  font-size: 0.875rem;
+  color: #86868b;
+  margin-bottom: 0.5rem;
+}
+
+.match-description {
+  font-size: 0.875rem;
+  color: #1d1d1f;
+  line-height: 1.4;
+}
+
+.match-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.details-button {
+  padding: 0.5rem 1rem;
+  background-color: #1d1d1f;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.details-button:hover {
+  background-color: #000000;
+  transform: translateY(-1px);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem;
+  color: #86868b;
+  background-color: #f5f5f7;
+  border-radius: 12px;
+  margin-top: 1.5rem;
+}
+
+/* 选手卡样式 */
+.player-card-content {
+  padding: 1.5rem;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.player-card-description {
+  background-color: #f5f5f7;
+  padding: 0.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  color: #1d1d1f;
+  height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.player-card-description p {
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  padding: 0;
+  margin-top: 0;
+}
+
+.player-card-description p:last-child {
+  margin-bottom: 0;
+}
+
+.player-card-section {
+  margin-top: 50px;
+  margin-bottom: 50px;
+}
+
+.gray-text {
+  color: #86868b;
+  font-size: 0.75rem;
+}
+
+.card {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  max-width: 400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #1d1d1f 0%, #000000 100%);
+  color: #ffffff;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.card-header h4 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.edit-button {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.card:hover .edit-button {
+  opacity: 1;
+}
+
+.card-input {
+  width: 150px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.info-item:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  background-color: #f9f9f9;
+}
+
+.info-item.editing {
+  cursor: default;
+  background-color: #f0f0f0;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.card-body {
+  padding: 2rem;
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.info-item .label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #86868b;
+}
+
+.info-item .value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1d1d1f;
+  transition: color 0.3s ease;
+}
+
+.info-item:hover .value {
+  color: #0071e3;
+  text-decoration: underline;
+}
+
+.address-value {
+  max-width: 40%;
+  overflow: hidden;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.address-input {
+  max-width: 40%;
+}
+
+.card-footer {
+  background-color: #f5f5f7;
+  padding: 1rem;
+  text-align: center;
+  border-top: 1px solid #d2d2d7;
+}
+
+.card-footer p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #86868b;
+}
+
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .match-layout {
@@ -1329,6 +1245,15 @@ const editPlayerName = (teamId, playerId) => {
   
   .registration-teams {
     grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .match-details {
+    flex-direction: column;
+    gap: 0.5rem;
   }
 }
 
@@ -1358,5 +1283,35 @@ const editPlayerName = (teamId, playerId) => {
   .player-input {
     width: 100%;
   }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .match-history-item,
+  .ongoing-match-card {
+    padding: 1.25rem;
+  }
+  
+  .match-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .match-actions {
+    justify-content: flex-start;
+  }
 }
+
+
 </style>
