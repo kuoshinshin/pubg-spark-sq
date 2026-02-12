@@ -24,7 +24,6 @@ export default defineConfig({
           // 将大型组件分离到单独的代码块
           'chat': ['./src/components/chat/Chat.vue'],
           'match': ['./src/components/match/Match.vue'],
-          'event': ['./src/components/event/Event.vue'],
           'profile': ['./src/components/profile/Profile.vue']
         }
       }
